@@ -25,9 +25,13 @@ import androidx.lifecycle.distinctUntilChanged
 import androidx.lifecycle.liveData
 import androidx.lifecycle.switchMap
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import com.example.android.codelabs.paging.data.GithubRepository
+import com.example.android.codelabs.paging.model.Repo
 import com.example.android.codelabs.paging.model.RepoSearchResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -36,59 +40,76 @@ import kotlinx.coroutines.launch
  * The ViewModel works with the [GithubRepository] to get the data.
  */
 class SearchRepositoriesViewModel(
-    private val repository: GithubRepository,
-    private val savedStateHandle: SavedStateHandle
+    private val repository: GithubRepository
+//    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+    private var currentQueryValue :String? = null
 
-    /**
-     * Stream of immutable states representative of the UI.
-     */
-    val state: LiveData<UiState>
+    private var currentSearchResult: Flow<PagingData<Repo>>? = null
 
-    /**
-     * Processor of side effects from the UI which in turn feedback into [state]
-     */
-    val accept: (UiAction) -> Unit
+    fun searchRepo(queryString:String):Flow<PagingData<Repo>>{
+        val lastResult = currentSearchResult
 
-    init {
-        val queryLiveData =
-            MutableLiveData(savedStateHandle.get(LAST_SEARCH_QUERY) ?: DEFAULT_QUERY)
-
-        state = queryLiveData
-            .distinctUntilChanged()
-            .switchMap { queryString ->
-                liveData {
-                    val uiState = repository.getSearchResultStream(queryString)
-                        .map {
-                            UiState(
-                                query = queryString,
-                                searchResult = it
-                            )
-                        }
-                        .asLiveData(Dispatchers.Main)
-                    emitSource(uiState)
-                }
-            }
-
-        accept = { action ->
-            when (action) {
-                is UiAction.Search -> queryLiveData.postValue(action.query)
-                is UiAction.Scroll -> if (action.shouldFetchMore) {
-                    val immutableQuery = queryLiveData.value
-                    if (immutableQuery != null) {
-                        viewModelScope.launch {
-                            repository.requestMore(immutableQuery)
-                        }
-                    }
-                }
-            }
+        if (queryString == currentQueryValue && lastResult != null){
+            return lastResult
         }
+        currentQueryValue = queryString
+        val newResult:Flow<PagingData<Repo>> = repository.getSearchResultStream(queryString)
+            .cachedIn(viewModelScope)
+        currentSearchResult = newResult
+        return newResult
     }
 
-    override fun onCleared() {
-        savedStateHandle[LAST_SEARCH_QUERY] = state.value?.query
-        super.onCleared()
-    }
+    //元のコード
+//    /**
+//     * Stream of immutable states representative of the UI.
+//     */
+//    val state: LiveData<UiState>
+//
+//    /**
+//     * Processor of side effects from the UI which in turn feedback into [state]
+//     */
+//    val accept: (UiAction) -> Unit
+//
+//    init {
+//        val queryLiveData =
+//            MutableLiveData(savedStateHandle.get(LAST_SEARCH_QUERY) ?: DEFAULT_QUERY)
+//
+//        state = queryLiveData
+//            .distinctUntilChanged()
+//            .switchMap { queryString ->
+//                liveData {
+//                    val uiState = repository.getSearchResultStream(queryString)
+//                        .map {
+//                            UiState(
+//                                query = queryString,
+//                                searchResult = it
+//                            )
+//                        }
+//                        .asLiveData(Dispatchers.Main)
+//                    emitSource(uiState)
+//                }
+//            }
+//
+//        accept = { action ->
+//            when (action) {
+//                is UiAction.Search -> queryLiveData.postValue(action.query)
+//                is UiAction.Scroll -> if (action.shouldFetchMore) {
+//                    val immutableQuery = queryLiveData.value
+//                    if (immutableQuery != null) {
+//                        viewModelScope.launch {
+//                            repository.requestMore(immutableQuery)
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
+//
+//    override fun onCleared() {
+//        savedStateHandle[LAST_SEARCH_QUERY] = state.value?.query
+//        super.onCleared()
+//    }
 }
 
 private val UiAction.Scroll.shouldFetchMore
