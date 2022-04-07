@@ -37,19 +37,6 @@ private const val GITHUB_STARTING_PAGE_INDEX = 1
  */
 class GithubRepository(private val service: GithubService) {
 
-    // keep the list of all results received
-    private val inMemoryCache = mutableListOf<Repo>()
-
-    // shared flow of results, which allows us to broadcast updates so
-    // the subscriber will have the latest data
-    private val searchResults = MutableSharedFlow<RepoSearchResult>(replay = 1)
-
-    // keep the last requested page. When the request is successful, increment the page number.
-    private var lastRequestedPage = GITHUB_STARTING_PAGE_INDEX
-
-    // avoid triggering multiple requests in the same time
-    private var isRequestInProgress = false
-
     /**
      * Search repositories whose names match the query, exposed as a stream of data that will emit
      * every time we get more data from the network.
@@ -82,6 +69,20 @@ class GithubRepository(private val service: GithubService) {
 
     //Pagingを実装することで、データを追加でリクエストするための以下の関数はすべて不要
 
+
+//元のコード
+//    // keep the list of all results received
+//    private val inMemoryCache = mutableListOf<Repo>()
+//
+//    // shared flow of results, which allows us to broadcast updates so
+//    // the subscriber will have the latest data
+//    private val searchResults = MutableSharedFlow<RepoSearchResult>(replay = 1)
+//
+//    // keep the last requested page. When the request is successful, increment the page number.
+//    private var lastRequestedPage = GITHUB_STARTING_PAGE_INDEX
+//
+//    // avoid triggering multiple requests in the same time
+//    private var isRequestInProgress = false
 
 //    suspend fun requestMore(query: String) {
 //        if (isRequestInProgress) return

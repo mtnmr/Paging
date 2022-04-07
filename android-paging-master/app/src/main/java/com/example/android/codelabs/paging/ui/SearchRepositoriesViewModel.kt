@@ -30,48 +30,99 @@ import androidx.paging.cachedIn
 import com.example.android.codelabs.paging.data.GithubRepository
 import com.example.android.codelabs.paging.model.Repo
 import com.example.android.codelabs.paging.model.RepoSearchResult
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.zip.DeflaterOutputStream
 
 /**
  * ViewModel for the [SearchRepositoriesActivity] screen.
  * The ViewModel works with the [GithubRepository] to get the data.
  */
 class SearchRepositoriesViewModel(
-    private val repository: GithubRepository
-//    private val savedStateHandle: SavedStateHandle
+    private val repository: GithubRepository,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
-    private var currentQueryValue :String? = null
 
-    private var currentSearchResult: Flow<PagingData<Repo>>? = null
+    //日本語版codeLab
+//    private var currentQueryValue :String? = null
+//
+//    private var currentSearchResult: Flow<PagingData<Repo>>? = null
 
-    fun searchRepo(queryString:String):Flow<PagingData<Repo>>{
-        val lastResult = currentSearchResult
+//    fun searchRepo(queryString:String):Flow<PagingData<Repo>>{
+//        val lastResult = currentSearchResult
+//
+//        if (queryString == currentQueryValue && lastResult != null){
+//            return lastResult
+//        }
+//        currentQueryValue = queryString
+//        val newResult:Flow<PagingData<Repo>> = repository.getSearchResultStream(queryString)
+//            .cachedIn(viewModelScope)
+//        currentSearchResult = newResult
+//        return newResult
+//    }
 
-        if (queryString == currentQueryValue && lastResult != null){
-            return lastResult
-        }
-        currentQueryValue = queryString
-        val newResult:Flow<PagingData<Repo>> = repository.getSearchResultStream(queryString)
+    /**
+     * Stream of immutable states representative of the UI.
+     */
+    val state: StateFlow<UiState>
+
+    val pagingDataFlow: Flow<PagingData<Repo>>
+
+    /**
+     * Processor of side effects from the UI which in turn feedback into [state]
+     */
+    val accept: (UiAction) -> Unit
+
+
+    init {
+        val initialQuery:String = savedStateHandle.get(LAST_SEARCH_QUERY) ?: DEFAULT_QUERY
+        val lastQueryScrolled :String = savedStateHandle.get(LAST_QUERY_SCROLLED) ?: DEFAULT_QUERY
+        val actionStateFlow = MutableSharedFlow<UiAction>()
+
+        val searches = actionStateFlow
+            .filterIsInstance<UiAction.Search>()
+            .distinctUntilChanged()
+            .onStart { emit(UiAction.Search(query = initialQuery)) }
+
+        val queryScrolled = actionStateFlow
+            .filterIsInstance<UiAction.Scroll>()
+            .distinctUntilChanged()
+            .shareIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5000),
+                replay = 1
+            )
+            .onStart { emit(UiAction.Scroll(currentQuery = lastQueryScrolled)) }
+
+
+
+        pagingDataFlow = searches
+            .flatMapLatest { searchRepo(queryString = it.query) }
             .cachedIn(viewModelScope)
-        currentSearchResult = newResult
-        return newResult
-    }
 
-    //元のコード
-//    /**
-//     * Stream of immutable states representative of the UI.
-//     */
-//    val state: LiveData<UiState>
-//
-//    /**
-//     * Processor of side effects from the UI which in turn feedback into [state]
-//     */
-//    val accept: (UiAction) -> Unit
-//
-//    init {
+        state = combine(
+            searches,
+            queryScrolled,
+            ::Pair
+        ).map{ (search, scroll) ->
+            UiState(
+                query = search.query,
+                lastQueryScrolled = scroll.currentQuery,
+                hasNotScrolledForCurrentSearch = search.query != scroll.currentQuery
+            )
+        }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5000),
+                initialValue = UiState()
+            )
+
+        accept = {action ->
+            viewModelScope.launch { actionStateFlow.emit(action) }
+        }
+
 //        val queryLiveData =
 //            MutableLiveData(savedStateHandle.get(LAST_SEARCH_QUERY) ?: DEFAULT_QUERY)
 //
@@ -104,31 +155,34 @@ class SearchRepositoriesViewModel(
 //                }
 //            }
 //        }
-//    }
-//
-//    override fun onCleared() {
-//        savedStateHandle[LAST_SEARCH_QUERY] = state.value?.query
-//        super.onCleared()
-//    }
+    }
+
+    override fun onCleared() {
+        savedStateHandle[LAST_SEARCH_QUERY] = state.value.query
+        savedStateHandle[LAST_QUERY_SCROLLED] = state.value.lastQueryScrolled
+        super.onCleared()
+    }
+
+    private fun searchRepo(queryString: String): Flow<PagingData<Repo>> {
+       return  repository.getSearchResultStream(queryString)
+    }
+
 }
 
-private val UiAction.Scroll.shouldFetchMore
-    get() = visibleItemCount + lastVisibleItemPosition + VISIBLE_THRESHOLD >= totalItemCount
 
 sealed class UiAction {
     data class Search(val query: String) : UiAction()
-    data class Scroll(
-        val visibleItemCount: Int,
-        val lastVisibleItemPosition: Int,
-        val totalItemCount: Int
-    ) : UiAction()
+    data class Scroll(val currentQuery:String) : UiAction()
 }
 
 data class UiState(
-    val query: String,
-    val searchResult: RepoSearchResult
+    val query: String = DEFAULT_QUERY,
+    val lastQueryScrolled:String = DEFAULT_QUERY,
+    val hasNotScrolledForCurrentSearch: Boolean = false
+//    val searchResult: RepoSearchResult
 )
 
 private const val VISIBLE_THRESHOLD = 5
 private const val LAST_SEARCH_QUERY: String = "last_search_query"
 private const val DEFAULT_QUERY = "Android"
+private const val LAST_QUERY_SCROLLED: String = "last_query_scrolled"
