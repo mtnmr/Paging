@@ -49,7 +49,9 @@ class SearchRepositoriesActivity : AppCompatActivity() {
         val decoration = DividerItemDecoration(this, DividerItemDecoration.VERTICAL)
         binding.list.addItemDecoration(decoration)
 
-        val viewModel = ViewModelProvider(this, Injection.provideViewModelFactory(owner = this))[SearchRepositoriesViewModel::class.java]
+        val viewModel = ViewModelProvider(
+            this, Injection.provideViewModelFactory(
+                context = this, owner = this))[SearchRepositoriesViewModel::class.java]
 
         // bind the state
         binding.bindState(
@@ -72,8 +74,9 @@ class SearchRepositoriesActivity : AppCompatActivity() {
         uiActions: (UiAction) -> Unit
     ) {
         val repoAdapter = ReposAdapter()
+        val header = ReposLoadStateAdapter { repoAdapter.retry() }
         list.adapter = repoAdapter.withLoadStateHeaderAndFooter(
-            header = ReposLoadStateAdapter{ repoAdapter.retry() },
+            header = header,
             footer = ReposLoadStateAdapter{ repoAdapter.retry() }
         )
 
@@ -82,6 +85,7 @@ class SearchRepositoriesActivity : AppCompatActivity() {
             onQueryChanged = uiActions
         )
         bindList(
+            header = header,
             repoAdapter = repoAdapter,
             uiState = uiState,
             pagingData = pagingData,
@@ -135,6 +139,7 @@ class SearchRepositoriesActivity : AppCompatActivity() {
 
 
     private fun ActivitySearchRepositoriesBinding.bindList(
+        header: ReposLoadStateAdapter,
         repoAdapter: ReposAdapter,
         uiState: StateFlow<UiState>,
         pagingData: Flow<PagingData<UiModel>>,
@@ -152,8 +157,8 @@ class SearchRepositoriesActivity : AppCompatActivity() {
 
 
         val notLoading = repoAdapter.loadStateFlow
-            .distinctUntilChangedBy { it.source.refresh }
-            .map { it.source.refresh is LoadState.NotLoading }
+            .asRemotePresentationState()
+            .map { it == RemotePresentationState.PRESENTED }
 
         val hasNotScrolledForCurrentSearch = uiState
             .map { it.hasNotScrolledForCurrentSearch }
@@ -178,11 +183,17 @@ class SearchRepositoriesActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             repoAdapter.loadStateFlow.collect { loadState ->
+                header.loadState = loadState.mediator
+                    ?.refresh
+                    ?.takeIf { it is LoadState.Error && repoAdapter.itemCount > 0 }
+                    ?: loadState.prepend
+
                 val isListEmpty = loadState.refresh is LoadState.NotLoading && repoAdapter.itemCount == 0
                 emptyList.isVisible = isListEmpty
-                list.isVisible = !isListEmpty
-                progressBar.isVisible = loadState.source.refresh is LoadState.Loading
-                retryButton.isVisible = loadState.source.refresh is LoadState.Error
+                //Only show the list if refresh succeeds, either from the the local db or the remote.
+                list.isVisible = loadState.source.refresh is LoadState.NotLoading || loadState.mediator?.refresh is LoadState.NotLoading
+                progressBar.isVisible = loadState.mediator?.refresh is LoadState.Loading
+                retryButton.isVisible =  loadState.mediator?.refresh is LoadState.Error && repoAdapter.itemCount == 0
 
                 val errorState = loadState.source.append as? LoadState.Error
                     ?: loadState.source.prepend as? LoadState.Error
