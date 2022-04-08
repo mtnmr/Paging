@@ -27,6 +27,8 @@ import androidx.lifecycle.switchMap
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import androidx.paging.insertSeparators
+import androidx.paging.map
 import com.example.android.codelabs.paging.data.GithubRepository
 import com.example.android.codelabs.paging.model.Repo
 import com.example.android.codelabs.paging.model.RepoSearchResult
@@ -68,7 +70,7 @@ class SearchRepositoriesViewModel(
      */
     val state: StateFlow<UiState>
 
-    val pagingDataFlow: Flow<PagingData<Repo>>
+    val pagingDataFlow: Flow<PagingData<UiModel>>
 
     /**
      * Processor of side effects from the UI which in turn feedback into [state]
@@ -163,8 +165,34 @@ class SearchRepositoriesViewModel(
         super.onCleared()
     }
 
-    private fun searchRepo(queryString: String): Flow<PagingData<Repo>> {
-       return  repository.getSearchResultStream(queryString)
+    private fun searchRepo(queryString: String): Flow<PagingData<UiModel>> =
+        repository.getSearchResultStream(queryString)
+           .map { pagingData -> pagingData.map { UiModel.RepoItem(it) } }
+           .map {
+               it.insertSeparators{ before, after ->
+                   if(after == null){
+                       // we're at the end of the list
+                       return@insertSeparators null
+                   }
+
+                   if (before == null) {
+                       // we're at the beginning of the list
+                       return@insertSeparators UiModel.SeparatorItem("${after.roundedStarCount}0.000+ stars")
+                   }
+
+                   // check between 2 items
+                   if (before.roundedStarCount > after.roundedStarCount){
+                       if (after.roundedStarCount >= 1){
+                           UiModel.SeparatorItem("${after.roundedStarCount}0.000+ stars")
+                       }else {
+                           UiModel.SeparatorItem("< 10.000+ stars")
+                       }
+                   } else {
+                       /// no separator
+                       null
+                   }
+           }
+
     }
 
 }
@@ -182,7 +210,19 @@ data class UiState(
 //    val searchResult: RepoSearchResult
 )
 
+
+sealed class UiModel {
+    data class RepoItem(val repo:Repo) : UiModel()
+    data class SeparatorItem(val description: String) : UiModel()
+}
+
+private val UiModel.RepoItem.roundedStarCount : Int
+    get() = this.repo.stars / 10_000
+
+
 private const val VISIBLE_THRESHOLD = 5
 private const val LAST_SEARCH_QUERY: String = "last_search_query"
 private const val DEFAULT_QUERY = "Android"
 private const val LAST_QUERY_SCROLLED: String = "last_query_scrolled"
+
+
