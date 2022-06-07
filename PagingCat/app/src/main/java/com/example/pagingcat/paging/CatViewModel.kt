@@ -13,7 +13,7 @@ import javax.inject.Inject
 class CatViewModel @Inject constructor(private val repository: CatRepository)  :ViewModel(){
 
     val cat:LiveData<PagingData<Cat>> =
-        Pager(PagingConfig(pageSize = 20, initialLoadSize = 20)){
+        Pager(PagingConfig(pageSize = 20, initialLoadSize = 30)){
             CatPagingSource(repository)
         }.liveData.cachedIn(viewModelScope)
 }

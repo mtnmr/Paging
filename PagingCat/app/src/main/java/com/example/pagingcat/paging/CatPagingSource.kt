@@ -16,7 +16,7 @@ class CatPagingSource(private val catRepository: CatRepository): PagingSource<In
                     LoadResult.Page(
                         data = it,
                         prevKey = (currentKey -1).takeIf { key -> key>0 },
-                        nextKey = (currentKey +1).takeIf { _ -> it.isNullOrEmpty()}
+                        nextKey = (currentKey +1).takeIf { _ -> it.isNotEmpty()}
                     )
                 },
                 onFailure = {
