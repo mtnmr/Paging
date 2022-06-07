@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">PagingCat</string>
+    <string name="default_name">CatName</string>
+    <string name="default_description">description</string>
 </resources>
