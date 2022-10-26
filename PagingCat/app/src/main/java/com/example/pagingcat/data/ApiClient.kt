@@ -28,8 +28,8 @@ class ApiClient {
 
     private fun provideHttpClient() =
         OkHttpClient.Builder()
-            .callTimeout(TIME_OUT_MILLIS, TimeUnit.MILLISECONDS)
-            .readTimeout(TIME_OUT_MILLIS, TimeUnit.MILLISECONDS)
+//            .callTimeout(TIME_OUT_MILLIS, TimeUnit.MILLISECONDS)
+//            .readTimeout(TIME_OUT_MILLIS, TimeUnit.MILLISECONDS)
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BODY
             })

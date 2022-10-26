@@ -20,9 +20,8 @@ class CatPagingSource(private val catRepository: CatRepository): PagingSource<In
                     )
                 },
                 onFailure = {
-                    Log.d("CatApp", it.toString())
+                    Log.d("CatApp", "LoadResult: $it")
                     LoadResult.Error(it)
-
                 }
             )
     }

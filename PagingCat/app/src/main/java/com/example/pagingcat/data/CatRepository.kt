@@ -16,7 +16,7 @@ class CatRepositoryImpl @Inject constructor(private val catSearchApi: CatSearchA
 
     override suspend fun cats(limit: Int, page: Int): Result<List<Cat>> = kotlin.runCatching {
         withContext(Dispatchers.IO) {
-            catSearchApi.cats(limit, page, API_KEY)
+            catSearchApi.cats(limit, page)
         }
     }
 }
